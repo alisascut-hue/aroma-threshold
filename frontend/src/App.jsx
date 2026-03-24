@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, FileSpreadsheet, List, FileText, Download, AlertCircle, Loader2, Info, Upload } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
+import { Search, FileSpreadsheet, List, FileText, Download, AlertCircle, Loader2, Info, Upload, ExternalLink } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function App() {
@@ -10,7 +10,12 @@ export default function App() {
   const [singleQuery, setSingleQuery] = useState('');
   const [bulkQuery, setBulkQuery] = useState('');
   const [selectedMedia, setSelectedMedia] = useState(['空气', '水', '其他介质']);
+  const [exactMatch, setExactMatch] = useState(true); // Default to exact match
   const fileInputRef = useRef(null);
+
+  // Use deferred values for smooth typing
+  const deferredSingleQuery = useDeferredValue(singleQuery);
+  const deferredBulkQuery = useDeferredValue(bulkQuery);
   
   useEffect(() => {
     fetch('/aroma_data_merged.json')
@@ -31,31 +36,38 @@ export default function App() {
     const mediaFilteredData = data.filter(item => selectedMedia.includes(item.medium));
     
     if (searchMode === 'single') {
-      if (!singleQuery.trim()) return [];
-      const q = singleQuery.toLowerCase().trim();
-      return mediaFilteredData.filter(item => 
-        (item.cas || "").toLowerCase().includes(q) || 
-        (item.english_name || "").toLowerCase().includes(q) || 
-        (item.chinese_name || "").toLowerCase().includes(q)
-      );
+      if (!deferredSingleQuery.trim()) return [];
+      const q = deferredSingleQuery.toLowerCase().trim();
+      return mediaFilteredData.filter(item => {
+        const cas = (item.cas || "").toLowerCase();
+        const en = (item.english_name || "").toLowerCase();
+        const cn = (item.chinese_name || "").toLowerCase();
+        if (exactMatch) {
+          return cas === q || en === q || cn === q;
+        } else {
+          return cas.includes(q) || en.includes(q) || cn.includes(q);
+        }
+      });
     } else {
-      if (!bulkQuery.trim()) return [];
-      const lines = bulkQuery.split('\n').map(l => l.toLowerCase().trim()).filter(Boolean);
+      if (!deferredBulkQuery.trim()) return [];
+      const lines = deferredBulkQuery.split('\n').map(l => l.toLowerCase().trim()).filter(Boolean);
       if (!lines.length) return [];
       
       const matched = [];
       const addedKeys = new Set();
       
       lines.forEach(line => {
-        // Find all records that strictly or loosely match the inputted line
-        const matches = mediaFilteredData.filter(item => 
-          (item.cas || "").toLowerCase() === line || 
-          (item.english_name || "").toLowerCase() === line || 
-          (item.chinese_name || "").toLowerCase() === line ||
-          (item.cas || "").toLowerCase().includes(line) ||
-          (item.english_name || "").toLowerCase().includes(line) ||
-          (item.chinese_name || "").toLowerCase().includes(line)
-        );
+        // Find all records that match
+        const matches = mediaFilteredData.filter(item => {
+          const cas = (item.cas || "").toLowerCase();
+          const en = (item.english_name || "").toLowerCase();
+          const cn = (item.chinese_name || "").toLowerCase();
+          if (exactMatch) {
+            return cas === line || en === line || cn === line;
+          } else {
+            return cas === line || en === line || cn === line || cas.includes(line) || en.includes(line) || cn.includes(line);
+          }
+        });
         matches.forEach(m => {
           // Since a compound might have multiple records (Air, Water, etc.), we key by CAS + Medium
           const key = (m.cas || "") + (m.medium || "");
@@ -67,7 +79,7 @@ export default function App() {
       });
       return matched;
     }
-  }, [data, singleQuery, bulkQuery, searchMode, selectedMedia]);
+  }, [data, deferredSingleQuery, deferredBulkQuery, searchMode, selectedMedia, exactMatch]);
 
   const toggleMedium = (medium) => {
     setSelectedMedia(prev => 
@@ -161,21 +173,42 @@ export default function App() {
         {/* Search Controls */}
         <div className="bg-white/70 backdrop-blur-xl rounded-3xl shadow-xl border border-white/40 p-6 md:p-8 mb-8 transition-all">
           
-          <div className="flex flex-wrap gap-4 mb-8 border-b border-slate-200 pb-4">
-            <button 
-              onClick={() => setSearchMode('single')}
-              className={`flex items-center px-6 py-3 rounded-full font-semibold transition-all duration-300 ${searchMode === 'single' ? 'bg-blue-600 text-white shadow-md shadow-blue-200 translate-y-[-2px]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-            >
-              <Search className="w-5 h-5 mr-2" />
-              精准检索
-            </button>
-            <button 
-              onClick={() => setSearchMode('bulk')}
-              className={`flex items-center px-6 py-3 rounded-full font-semibold transition-all duration-300 ${searchMode === 'bulk' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 translate-y-[-2px]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-            >
-              <List className="w-5 h-5 mr-2" />
-              批量匹配
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-8 border-b border-slate-200 pb-4">
+            <div className="flex flex-wrap gap-4">
+              <button 
+                onClick={() => setSearchMode('single')}
+                className={`flex items-center px-6 py-3 rounded-full font-semibold transition-all duration-300 ${searchMode === 'single' ? 'bg-blue-600 text-white shadow-md shadow-blue-200 translate-y-[-2px]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                <Search className="w-5 h-5 mr-2" />
+                搜索框模式
+              </button>
+              <button 
+                onClick={() => setSearchMode('bulk')}
+                className={`flex items-center px-6 py-3 rounded-full font-semibold transition-all duration-300 ${searchMode === 'bulk' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 translate-y-[-2px]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                <List className="w-5 h-5 mr-2" />
+                批量匹配模式
+              </button>
+            </div>
+
+            <div className="flex bg-slate-100 p-1.5 rounded-full shadow-inner border border-slate-200">
+              <button 
+                onClick={() => setExactMatch(true)}
+                className={`px-5 py-2 rounded-full text-sm font-bold transition-all shadow-sm ${
+                  exactMatch ? 'bg-white text-indigo-700 border border-slate-200/50' : 'text-slate-500 hover:text-slate-700 bg-transparent shadow-none border border-transparent'
+                }`}
+              >
+                精确检索
+              </button>
+              <button 
+                onClick={() => setExactMatch(false)}
+                className={`px-5 py-2 rounded-full text-sm font-bold transition-all shadow-sm ${
+                  !exactMatch ? 'bg-white text-indigo-700 border border-slate-200/50' : 'text-slate-500 hover:text-slate-700 bg-transparent shadow-none border border-transparent'
+                }`}
+              >
+                模糊检索
+              </button>
+            </div>
           </div>
 
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -187,7 +220,7 @@ export default function App() {
                 <input
                   type="text"
                   className="block w-full pl-14 pr-4 py-4 md:text-lg bg-white border-2 border-slate-200 rounded-2xl focus:ring-0 focus:border-blue-500 transition-all shadow-inner placeholder:text-slate-400"
-                  placeholder="输入化合物中文名、英文名或 CAS 号进行模糊检索 (例如: 64-19-7, 乙酸)"
+                  placeholder={exactMatch ? "输入化合物中文名、英文名或 CAS 号进行【精确】检索 (例如: 64-19-7, 乙酸)" : "输入化合物中文名、英文名或 CAS 号进行【模糊】检索 (例如: 64-19-7, 乙酸)"}
                   value={singleQuery}
                   onChange={(e) => setSingleQuery(e.target.value)}
                 />
@@ -324,6 +357,38 @@ export default function App() {
                           </li>
                         ))}
                       </ul>
+                    </div>
+
+                    {/* External Database Search Links */}
+                    <div className="mt-5 pt-5 border-t border-slate-100 flex flex-wrap items-center gap-3">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest mr-2 flex items-center">
+                        <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                        香气描述外链查询:
+                      </span>
+                      <a
+                        href={`https://www.google.com/search?q=site:thegoodscentscompany.com+"${item.cas}"`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center px-3 py-1.5 bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-600 rounded-lg text-xs font-medium border border-slate-200 hover:border-rose-200 transition-colors"
+                      >
+                        The Good Scents Company
+                      </a>
+                      <a
+                        href={`https://www.femaflavor.org/flavor-library?cas=${item.cas}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center px-3 py-1.5 bg-slate-50 hover:bg-amber-50 text-slate-600 hover:text-amber-600 rounded-lg text-xs font-medium border border-slate-200 hover:border-amber-200 transition-colors"
+                      >
+                        FEMA Flavor
+                      </a>
+                      <a
+                        href={`https://www.google.com/search?q=site:perflavory.com+"${item.cas}"`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center px-3 py-1.5 bg-slate-50 hover:bg-purple-50 text-slate-600 hover:text-purple-600 rounded-lg text-xs font-medium border border-slate-200 hover:border-purple-200 transition-colors"
+                      >
+                        Perflavory
+                      </a>
                     </div>
                   </div>
                 ))}
