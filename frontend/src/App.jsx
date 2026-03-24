@@ -18,7 +18,7 @@ export default function App() {
   const deferredBulkQuery = useDeferredValue(bulkQuery);
   
   useEffect(() => {
-    fetch('/aroma_data_merged.json')
+    fetch(`${import.meta.env.BASE_URL}aroma_data_merged.json`)
       .then(res => res.json())
       .then(json => {
         setData(json);
