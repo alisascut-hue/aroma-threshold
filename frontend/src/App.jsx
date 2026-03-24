@@ -2,6 +2,21 @@ import { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { Search, FileSpreadsheet, List, FileText, Download, AlertCircle, Loader2, Info, Upload, ExternalLink } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
+const parseThresholdStr = (str) => {
+  const match = str.match(/^(.+?\(\d{4}.*?\))\s*(?:([dr])\s+)?(.*)$/);
+  if (match) {
+    let typeStr = '-';
+    if (match[2] === 'd') typeStr = '觉察阈 (d)';
+    else if (match[2] === 'r') typeStr = '识别阈 (r)';
+    return {
+      author: match[1].trim(),
+      type: typeStr,
+      value: match[3].trim()
+    };
+  }
+  return { author: str, type: '-', value: '-' };
+};
+
 export default function App() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -92,16 +107,37 @@ export default function App() {
   const exportCSV = () => {
     if (!results.length) return;
     
-    const headers = ['CAS号', '英文名称', '中文名称', '检测介质', '阈值详情 (作者, 阈值与单位)'];
-    const rows = results.map(item => [
-      item.cas || "",
-      `"${(item.english_name || "").replace(/"/g, '""')}"`,
-      `"${(item.chinese_name || "").replace(/"/g, '""')}"`,
-      `"${item.medium || ""}"`,
-      `"${(item.threshold_data || []).join('  |  ').replace(/"/g, '""')}"`
-    ]);
+    const headers = ['序号', 'CAS号', '化合物中文名', '化合物英文名', '检索介质', '文献来源', '阈值类型(d/r)', '阈值(ppm)'];
+    const rows = [headers.join(',')];
     
-    const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(",")).join("\n");
+    results.forEach((item, index) => {
+      const cas = `"${item.cas || ''}"`;
+      const cn = `"${(item.chinese_name || '').replace(/"/g, '""')}"`;
+      const en = `"${(item.english_name || '').replace(/"/g, '""')}"`;
+      const medium = `"${item.medium || ''}"`;
+      
+      const thresholds = item.threshold_data || [];
+      if (thresholds.length === 0) {
+        rows.push([index + 1, cas, cn, en, medium, '""', '""', '""'].join(','));
+      } else {
+        thresholds.forEach((thStr, tIdx) => {
+          const parsed = parseThresholdStr(thStr);
+          // Only show index on the first row of the compound
+          rows.push([
+            tIdx === 0 ? index + 1 : "",
+            tIdx === 0 ? cas : '""',
+            tIdx === 0 ? cn : '""',
+            tIdx === 0 ? en : '""',
+            tIdx === 0 ? medium : '""',
+            `"${parsed.author.replace(/"/g, '""')}"`,
+            `"${parsed.type.replace(/"/g, '""')}"`,
+            `"${parsed.value.replace(/"/g, '""')}"`
+          ].join(','));
+        });
+      }
+    });
+
+    const csvContent = "\uFEFF" + rows.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -349,14 +385,33 @@ export default function App() {
                         <Info className="w-4 h-4 mr-2" />
                         研究文献与阈值数据记录
                       </h4>
-                      <ul className="space-y-3 font-mono text-sm text-slate-700">
-                        {item.threshold_data.map((record, rIdx) => (
-                          <li key={rIdx} className="flex">
-                            <span className="text-blue-400 mr-3 hidden md:inline">▸</span>
-                            <span className="leading-relaxed">{record}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      {item.threshold_data && item.threshold_data.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse min-w-max">
+                            <thead>
+                              <tr className="bg-slate-200/50 text-slate-500 text-xs uppercase tracking-wider">
+                                <th className="px-3 py-2 rounded-l-lg font-medium">文献来源</th>
+                                <th className="px-3 py-2 font-medium">阈值类型</th>
+                                <th className="px-3 py-2 rounded-r-lg font-medium">阈值 (ppm)</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-sm">
+                              {item.threshold_data.map((th, idx) => {
+                                const parsed = parseThresholdStr(th);
+                                return (
+                                  <tr key={idx} className="border-b border-slate-200/60 last:border-0 hover:bg-slate-100 transition-colors">
+                                    <td className="px-3 py-2.5 text-slate-700 font-medium">{parsed.author}</td>
+                                    <td className="px-3 py-2.5 text-slate-500">{parsed.type}</td>
+                                    <td className="px-3 py-2.5 text-blue-600 font-mono tracking-tight">{parsed.value}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-slate-400 py-2">暂无阈值详细记录</div>
+                      )}
                     </div>
 
                     {/* External Database Search Links */}
