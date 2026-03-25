@@ -107,7 +107,7 @@ export default function App() {
   const exportCSV = () => {
     if (!results.length) return;
     
-    const headers = ['序号', 'CAS号', '化合物中文名', '化合物英文名', '检索介质', '文献来源', '阈值类型(d/r)', '阈值(ppm)'];
+    const headers = ['序号', 'CAS号', '化合物中文名', '化合物英文名', '检索介质', '文献来源', '阈值类型(d/r)', '阈值(ppm)', '风味分类', '风味描述'];
     const rows = [headers.join(',')];
     
     results.forEach((item, index) => {
@@ -115,10 +115,12 @@ export default function App() {
       const cn = `"${(item.chinese_name || '').replace(/"/g, '""')}"`;
       const en = `"${(item.english_name || '').replace(/"/g, '""')}"`;
       const medium = `"${item.medium || ''}"`;
-      
+      const flavorCats = `"${(item.flavor_categories || []).join('; ')}"` ;
+      const flavorDesc = `"${(item.flavor_desc_cn || []).join('; ')}"` ;
+
       const thresholds = item.threshold_data || [];
       if (thresholds.length === 0) {
-        rows.push([index + 1, cas, cn, en, medium, '""', '""', '""'].join(','));
+        rows.push([index + 1, cas, cn, en, medium, '""', '""', '""', flavorCats, flavorDesc].join(','));
       } else {
         thresholds.forEach((thStr, tIdx) => {
           const parsed = parseThresholdStr(thStr);
@@ -131,7 +133,9 @@ export default function App() {
             tIdx === 0 ? medium : '""',
             `"${parsed.author.replace(/"/g, '""')}"`,
             `"${parsed.type.replace(/"/g, '""')}"`,
-            `"${parsed.value.replace(/"/g, '""')}"`
+            `"${parsed.value.replace(/"/g, '""')}"`,
+            tIdx === 0 ? flavorCats : '""',
+            tIdx === 0 ? flavorDesc : '""'
           ].join(','));
         });
       }
@@ -413,6 +417,32 @@ export default function App() {
                         <div className="text-sm text-slate-400 py-2">暂无阈值详细记录</div>
                       )}
                     </div>
+
+                    {/* Flavor Profile Section */}
+                    {item.flavor_categories && item.flavor_categories.length > 0 && (
+                      <div className="mt-5 p-4 bg-gradient-to-r from-amber-50/80 to-orange-50/50 rounded-xl border border-amber-100/60">
+                        <h4 className="text-sm font-semibold text-amber-700 uppercase tracking-wider mb-3 flex items-center">
+                          🌸 风味描述与分类
+                        </h4>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {item.flavor_categories.map((cat, ci) => (
+                            <span key={ci} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-white shadow-sm border border-amber-200 text-amber-800">
+                              {cat}
+                            </span>
+                          ))}
+                        </div>
+                        {item.flavor_desc_cn && item.flavor_desc_cn.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {item.flavor_desc_cn.map((desc, di) => (
+                              <span key={di} className="text-xs px-2 py-0.5 bg-amber-100/60 text-amber-600 rounded-md">
+                                {desc}
+                              </span>
+                            ))}
+                            <span className="text-xs text-slate-400 ml-1 self-center">(来源: FlavorNet)</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* External Database Search Links */}
                     <div className="mt-5 pt-5 border-t border-slate-100 flex flex-wrap items-center gap-3">
