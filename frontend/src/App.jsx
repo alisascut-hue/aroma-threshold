@@ -71,6 +71,8 @@ export default function App() {
   const matchReference = (shortCitation) => {
     if (!shortCitation) return null;
     
+    // Clean citation (remove 'et al.' etc)
+    const cleanCitation = shortCitation.replace(/et\s+al\.?/gi, '').trim();
     const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     
     // Strategy 1: O(1) pre-computed lookup (highest precision)
@@ -79,71 +81,74 @@ export default function App() {
       if (refsLookup[normCite]) return refsLookup[normCite];
     }
     
-    // Strategy 2: Scoring-based fuzzy match (fallback)
     if (!normRefsKeys.length) return null;
     
-    // Extract all years from the citation (handles multi-year like "1969,1974")
-    const yearMatches = [...shortCitation.matchAll(/(18|19|20)\d{2}/g)];
-    if (yearMatches.length === 0) return null;
+    // Strategy 2: Scoring-based fuzzy match
+    const yearMatches = [...cleanCitation.matchAll(/(18|19|20)\d{2}/g)];
     const years = yearMatches.map(m => m[0]);
     
-    // Extract main author surname (handle "Van X", "De X" prefixes)
     let mainAuthor = "";
-    const vanDeMatch = shortCitation.match(/^(Van|De|Von|Le|La|Du|Di)\s+([a-zA-Z\u00C0-\u024F\u1E00-\u1EFF\-]+)/i);
-    const hyphenMatch = shortCitation.match(/^([a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]+\-[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]+)/);
-    const simpleMatch = shortCitation.match(/^([a-zA-Z\u00C0-\u024F\u1E00-\u1EFF\-]+)/);
+    const vanDeMatch = cleanCitation.match(/^(Van|De|Von|Le|La|Du|Di)\s+([a-zA-Z\u00C0-\u024F\u1E00-\u1EFF\-]+)/i);
+    const hyphenMatch = cleanCitation.match(/^([a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]+\-[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]+)/);
+    const simpleMatch = cleanCitation.match(/^([a-zA-Z\u00C0-\u024F\u1E00-\u1EFF\-]+)/);
     
-    if (hyphenMatch) {
+    if (vanDeMatch) {
+      // e.g. "Van Anrooij" wants "van anrooij" but our keys often have "ANROOIJ, A. VAN"
+      mainAuthor = normalize(vanDeMatch[2]); 
+    } else if (hyphenMatch) {
       mainAuthor = normalize(hyphenMatch[1]);
     } else if (simpleMatch) {
       mainAuthor = normalize(simpleMatch[1]);
     }
     if (!mainAuthor) return null;
     
-    // Also extract second author for "&" citations like "Blank & Schieberle (1993)"
     let secondAuthor = "";
-    const ampMatch = shortCitation.match(/[&\&]\s*([a-zA-Z\u00C0-\u024F\u1E00-\u1EFF\-]+)/);
+    const ampMatch = cleanCitation.match(/[&\&]\s*([a-zA-Z\u00C0-\u024F\u1E00-\u1EFF\-]+)/);
     if (ampMatch) secondAuthor = normalize(ampMatch[1]);
     
-    // Scoring: find best match
     let bestMatch = null;
     let bestScore = 0;
+    
+    // Keep track of authors matched without year for fallback
+    const authorOnlyMatches = [];
     
     for (const refItem of normRefsKeys) {
       let score = 0;
       const normKey = refItem.normalized;
       
-      // Year must match at least one
-      const yearFound = years.some(y => normKey.includes(y));
-      if (!yearFound) continue;
-      
-      // Check if main author appears in the key
-      if (normKey.startsWith(mainAuthor)) {
-        score += 10; // Strong: key starts with main author
-      } else if (normKey.includes(mainAuthor)) {
-        score += 5;  // Weaker: author appears somewhere in key
-      } else {
-        continue; // Author not found at all, skip
-      }
-      
-      // Bonus for second author match (for "Author & Author2 (year)")
-      if (secondAuthor && normKey.includes(secondAuthor)) {
-        score += 3;
-      }
-      
-      // Bonus for exact year match with suffix (e.g. "1998a")
-      const yearSuffix = shortCitation.match(/\((\d{4}[a-z]?)\)/);
-      if (yearSuffix && normKey.includes(yearSuffix[1])) {
-        score += 2;
-      }
-      
-      // Handle "Van X" -> reference key is "X, ... VAN (year)"
+      let authorFound = false;
       if (vanDeMatch) {
         const prefix = normalize(vanDeMatch[1]);
         const surname = normalize(vanDeMatch[2]);
         if (normKey.includes(surname) && normKey.includes(prefix)) {
-          score += 4;
+          authorFound = true;
+          score += 6;
         }
+      } else if (normKey.startsWith(mainAuthor)) {
+        authorFound = true;
+        score += 10;
+      } else if (normKey.includes(mainAuthor)) {
+        authorFound = true;
+        score += 5;
+      }
+      
+      if (!authorFound) continue;
+      
+      authorOnlyMatches.push(refItem.fullText);
+      
+      if (years.length > 0) {
+        const yearFound = years.some(y => normKey.includes(y));
+        if (!yearFound) continue;
+        score += 10;
+      }
+      
+      if (secondAuthor && normKey.includes(secondAuthor)) {
+        score += 5;
+      }
+      
+      const yearSuffix = cleanCitation.match(/\((\d{4}[a-z]?)\)/);
+      if (yearSuffix && normKey.includes(yearSuffix[1])) {
+        score += 3;
       }
       
       if (score > bestScore) {
@@ -152,7 +157,13 @@ export default function App() {
       }
     }
     
-    return bestMatch;
+    if (bestMatch && bestScore >= 15) return bestMatch; 
+    
+    // Strict fallback: If we couldn't match the year (or none provided), 
+    // but the author is so unique they only appear in EXACTLY ONE reference in the entire PDF!
+    if (authorOnlyMatches.length === 1) return authorOnlyMatches[0];
+    
+    return null;
   };
 
   const results = useMemo(() => {
