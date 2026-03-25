@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
-import { Search, FileSpreadsheet, List, FileText, Download, AlertCircle, Loader2, Info, Upload, ExternalLink } from 'lucide-react';
+import { Search, FileSpreadsheet, List, FileText, Download, AlertCircle, Loader2, Info, Upload, ExternalLink, X, Copy, Check } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const parseThresholdStr = (str) => {
@@ -34,6 +34,8 @@ export default function App() {
   
   const [references, setReferences] = useState({});
   const [normRefsKeys, setNormRefsKeys] = useState([]);
+  const [selectedRef, setSelectedRef] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const normalize = (str) => {
@@ -447,16 +449,16 @@ export default function App() {
                                         const fullRef = matchReference(parsed.author);
                                         if (fullRef) {
                                           return (
-                                            <div className="group relative justify-center inline-block cursor-help">
-                                              <span className="border-b border-dashed border-slate-400 hover:text-blue-600 transition-colors">
+                                            <button 
+                                              onClick={() => setSelectedRef({ author: parsed.author, text: fullRef })}
+                                              className="group inline-flex items-center text-left"
+                                              aria-label="查看完整文献"
+                                            >
+                                              <span className="border-b border-dashed border-blue-400 text-blue-600 group-hover:text-blue-800 transition-colors">
                                                 {parsed.author}
                                               </span>
-                                              <div className="absolute z-50 invisible opacity-0 group-hover:visible group-hover:opacity-100 bg-slate-800 text-slate-50 p-4 rounded-xl shadow-2xl text-xs w-[280px] md:w-[360px] bottom-full mb-2 left-1/2 min-w-max -translate-x-1/2 font-normal whitespace-pre-wrap leading-relaxed transition-all duration-200 pointer-events-none">
-                                                <div className="font-semibold text-blue-300 mb-1 border-b border-slate-600 pb-1">完整文献信息</div>
-                                                {fullRef}
-                                                <div className="absolute w-3 h-3 bg-slate-800 rotate-45 left-1/2 -bottom-1.5 -translate-x-1/2"></div>
-                                              </div>
-                                            </div>
+                                              <Info className="w-3.5 h-3.5 ml-1.5 text-blue-400 group-hover:text-blue-600 opacity-70" />
+                                            </button>
                                           );
                                         }
                                         return parsed.author;
@@ -540,6 +542,63 @@ export default function App() {
         )}
 
       </div>
+
+      {/* Reference Modal */}
+      {selectedRef && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setSelectedRef(null)}></div>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-500" />
+                文献来源详情
+              </h3>
+              <button 
+                onClick={() => setSelectedRef(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-4 inline-block px-3 py-1 bg-blue-50 text-blue-700 text-sm font-semibold rounded-lg border border-blue-100">
+                引文索引: {selectedRef.author}
+              </div>
+              <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 text-slate-700 text-[15px] leading-relaxed font-serif whitespace-pre-wrap selection:bg-blue-200 max-h-[50vh] overflow-y-auto">
+                {selectedRef.text}
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(selectedRef.text);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className={`flex items-center px-6 py-2.5 rounded-xl font-bold transition-all duration-300 shadow-sm ${
+                  copied 
+                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-200 scale-[1.02]' 
+                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200 hover:-translate-y-0.5'
+                }`}
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    复制成功
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 mr-2" />
+                    一键复制文献内容
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
