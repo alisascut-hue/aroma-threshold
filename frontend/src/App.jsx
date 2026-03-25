@@ -32,11 +32,29 @@ export default function App() {
   const deferredSingleQuery = useDeferredValue(singleQuery);
   const deferredBulkQuery = useDeferredValue(bulkQuery);
   
+  const [references, setReferences] = useState({});
+  const [normRefsKeys, setNormRefsKeys] = useState([]);
+
   useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}aroma_data_merged.json`)
-      .then(res => res.json())
-      .then(json => {
-        setData(json);
+    const normalize = (str) => {
+      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    };
+
+    Promise.all([
+      fetch(`${import.meta.env.BASE_URL}aroma_data_merged.json`).then(res => res.json()),
+      fetch(`${import.meta.env.BASE_URL}references.json`).then(res => res.json())
+    ])
+      .then(([dataJson, refsJson]) => {
+        setData(dataJson);
+        setReferences(refsJson);
+        
+        const normKeys = Object.keys(refsJson).map(k => ({
+          original: k,
+          normalized: normalize(k),
+          fullText: refsJson[k]
+        }));
+        setNormRefsKeys(normKeys);
+        
         setLoading(false);
       })
       .catch(err => {
@@ -44,6 +62,26 @@ export default function App() {
         setLoading(false);
       });
   }, []);
+
+  const matchReference = (shortCitation) => {
+    if (!shortCitation || !normRefsKeys.length) return null;
+    const yearMatches = [...shortCitation.matchAll(/18\d{2}|19\d{2}|20\d{2}/g)];
+    if (yearMatches.length === 0) return null;
+    const year = yearMatches[0][0];
+    
+    const authorMatch = shortCitation.match(/^[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF\-]+/);
+    if (!authorMatch) return null;
+    
+    const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const mainAuthor = normalize(authorMatch[0]);
+    
+    for (const refItem of normRefsKeys) {
+      if (refItem.normalized.includes(year) && refItem.normalized.startsWith(mainAuthor)) {
+        return refItem.fullText;
+      }
+    }
+    return null;
+  };
 
   const results = useMemo(() => {
     if (!data.length) return [];
@@ -404,7 +442,26 @@ export default function App() {
                                 const parsed = parseThresholdStr(th);
                                 return (
                                   <tr key={idx} className="border-b border-slate-200/60 last:border-0 hover:bg-slate-100 transition-colors">
-                                    <td className="px-3 py-2.5 text-slate-700 font-medium">{parsed.author}</td>
+                                    <td className="px-3 py-2.5 text-slate-700 font-medium">
+                                      {(() => {
+                                        const fullRef = matchReference(parsed.author);
+                                        if (fullRef) {
+                                          return (
+                                            <div className="group relative justify-center inline-block cursor-help">
+                                              <span className="border-b border-dashed border-slate-400 hover:text-blue-600 transition-colors">
+                                                {parsed.author}
+                                              </span>
+                                              <div className="absolute z-50 invisible opacity-0 group-hover:visible group-hover:opacity-100 bg-slate-800 text-slate-50 p-4 rounded-xl shadow-2xl text-xs w-[280px] md:w-[360px] bottom-full mb-2 left-1/2 min-w-max -translate-x-1/2 font-normal whitespace-pre-wrap leading-relaxed transition-all duration-200 pointer-events-none">
+                                                <div className="font-semibold text-blue-300 mb-1 border-b border-slate-600 pb-1">完整文献信息</div>
+                                                {fullRef}
+                                                <div className="absolute w-3 h-3 bg-slate-800 rotate-45 left-1/2 -bottom-1.5 -translate-x-1/2"></div>
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+                                        return parsed.author;
+                                      })()}
+                                    </td>
                                     <td className="px-3 py-2.5 text-slate-500">{parsed.type}</td>
                                     <td className="px-3 py-2.5 text-blue-600 font-mono tracking-tight">{parsed.value}</td>
                                   </tr>
