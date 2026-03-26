@@ -228,7 +228,7 @@ export default function App() {
   const exportCSV = () => {
     if (!results.length) return;
     
-    const headers = ['序号', 'CAS号', '化合物中文名', '化合物英文名', '检索介质', '文献来源', '阈值类型(d/r)', '阈值(ppm)', '风味分类', '风味描述'];
+    const headers = ['序号', 'CAS号', '化合物中文名', '化合物英文名', '检索介质', '文献来源', '阈值类型(d/r)', '阈值数值', '阈值单位', '风味分类', '风味描述'];
     const rows = [headers.join(',')];
     
     results.forEach((item, index) => {
@@ -236,12 +236,13 @@ export default function App() {
       const cn = `"${(item.chinese_name || '').replace(/"/g, '""')}"`;
       const en = `"${(item.english_name || '').replace(/"/g, '""')}"`;
       const medium = `"${item.medium || ''}"`;
+      const unit = item.medium === '空气' ? '"mg/m³"' : '"mg/kg"';
       const flavorCats = `"${(item.flavor_categories || []).join('; ')}"` ;
       const flavorDesc = `"${(item.flavor_desc_cn || []).join('; ')}"` ;
 
       const thresholds = item.threshold_data || [];
       if (thresholds.length === 0) {
-        rows.push([index + 1, cas, cn, en, medium, '""', '""', '""', flavorCats, flavorDesc].join(','));
+        rows.push([index + 1, cas, cn, en, medium, '""', '""', '""', unit, flavorCats, flavorDesc].join(','));
       } else {
         thresholds.forEach((thStr, tIdx) => {
           const parsed = parseThresholdStr(thStr);
@@ -255,6 +256,7 @@ export default function App() {
             `"${parsed.author.replace(/"/g, '""')}"`,
             `"${parsed.type.replace(/"/g, '""')}"`,
             `"${parsed.value.replace(/"/g, '""')}"`,
+            unit,
             tIdx === 0 ? flavorCats : '""',
             tIdx === 0 ? flavorDesc : '""'
           ].join(','));
@@ -521,7 +523,7 @@ export default function App() {
                               <tr className="bg-slate-200/50 text-slate-500 text-xs uppercase tracking-wider">
                                 <th className="px-3 py-2 rounded-l-lg font-medium">文献来源</th>
                                 <th className="px-3 py-2 font-medium">阈值类型</th>
-                                <th className="px-3 py-2 rounded-r-lg font-medium">阈值 (ppm)</th>
+                                <th className="px-3 py-2 rounded-r-lg font-medium">阈值 ({item.medium === '空气' ? 'mg/m³' : 'mg/kg'})</th>
                               </tr>
                             </thead>
                             <tbody className="text-sm">
