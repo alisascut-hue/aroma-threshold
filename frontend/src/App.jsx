@@ -318,11 +318,15 @@ export default function App() {
         {/* Header Section */}
         <header className="mb-10 text-center">
           <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 mb-4 tracking-tight drop-shadow-sm">
-            香气风味描述与阈值库
+            香气阈值查询库
           </h1>
-          <p className="text-slate-500 text-lg max-w-2xl mx-auto">
+          <p className="text-slate-500 text-lg max-w-2xl mx-auto mb-3">
             精准聚合文献级香气阈值数据。支持通过 CAS 号、中英文名进行单物质检索或批量清单匹配查询。
           </p>
+          <div className="inline-flex items-center text-left px-4 py-2.5 bg-amber-50/80 rounded-xl border border-amber-200/60 text-amber-700 text-sm font-medium shadow-sm transition-transform hover:scale-[1.01]">
+            <Info className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
+            <span className="leading-snug">数据库来源《ODOUR THRESHOLDS》第二版，仅作个人学习和交流使用，不可用于商用。若转载分享，需注明来源。</span>
+          </div>
           {loading && (
             <div className="flex items-center justify-center mt-6 text-blue-500 bg-blue-50 py-2 px-4 rounded-full inline-flex mx-auto shadow-sm border border-blue-100">
               <Loader2 className="animate-spin mr-2 h-5 w-5" />
